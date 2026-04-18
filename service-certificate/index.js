@@ -112,6 +112,7 @@ app.get("/generate-certificate/:workerId", verifyToken, async (req, res, next) =
 
     if (format === "pdf") {
       const browser = await puppeteer.launch({
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
       });
       try {

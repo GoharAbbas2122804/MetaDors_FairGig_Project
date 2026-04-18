@@ -58,6 +58,7 @@ const evidenceUpload = multer({
 });
 
 router.post("/shift", verifyToken, requireRole(["worker"]), logShift);
+router.post("/log-shift", verifyToken, requireRole(["worker"]), logShift);
 router.get("/shifts", verifyToken, requireRole(["worker"]), getShiftHistory);
 router.patch(
   "/shift/:shiftId/verification-status",

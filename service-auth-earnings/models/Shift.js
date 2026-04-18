@@ -47,6 +47,10 @@ const shiftSchema = new mongoose.Schema(
       default: "pending",
       index: true,
     },
+    anomalyFlags: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );

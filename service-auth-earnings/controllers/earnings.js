@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const csv = require("csv-parser");
+const axios = require("axios");
 const Shift = require("../models/Shift");
 
 const ALLOWED_STATUSES = new Set([
@@ -56,6 +57,30 @@ function normalizeShiftInput(payload) {
   };
 }
 
+async function detectShiftAnomalies(shiftPayload) {
+  try {
+    const { data } = await axios.post(
+      "http://localhost:8001/detect-anomalies",
+      { shifts: [shiftPayload] },
+      { timeout: 5000 }
+    );
+
+    if (!data) {
+      return [];
+    }
+
+    if (Array.isArray(data)) {
+      return data.map((item) => item.type || item.human_readable_explanation).filter(Boolean);
+    }
+
+    return [];
+  } catch (error) {
+    // The anomaly detector is a secondary service; log and continue core flow.
+    console.warn("Anomaly service unavailable, proceeding without anomaly flags:", error.message);
+    return [];
+  }
+}
+
 async function logShift(req, res, next) {
   try {
     const normalized = normalizeShiftInput(req.body);
@@ -63,9 +88,14 @@ async function logShift(req, res, next) {
       return res.status(400).json({ message: normalized.error });
     }
 
+    const anomalyFlags = await detectShiftAnomalies(normalized.shift);
+    const verificationStatus = anomalyFlags.length ? "flagged" : undefined;
+
     const shift = await Shift.create({
       workerId: req.user._id,
       ...normalized.shift,
+      verificationStatus,
+      anomalyFlags,
     });
 
     return res.status(201).json({
