@@ -1,6 +1,12 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "change-me-access-secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error(
+    "[AUTH] Missing JWT_SECRET. Set JWT_SECRET in service-certificate/.env or environment."
+  );
+  process.exit(1);
+}
 
 function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;

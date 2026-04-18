@@ -4,9 +4,16 @@ const User = require("../models/User");
 
 const ACCESS_TOKEN_EXPIRY = process.env.JWT_EXPIRES_IN || "15m";
 const REFRESH_TOKEN_EXPIRY = process.env.JWT_REFRESH_EXPIRES_IN || "7d";
-const JWT_SECRET = process.env.JWT_SECRET || "change-me-access-secret";
-const JWT_REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET || "change-me-refresh-secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+  console.error(
+    "[AUTH] Missing JWT_SECRET or JWT_REFRESH_SECRET. " +
+      "Set both environment variables in service-auth-earnings/.env."
+  );
+  process.exit(1);
+}
 
 function signAccessToken(user) {
   return jwt.sign({ _id: user._id, role: user.role }, JWT_SECRET, {
