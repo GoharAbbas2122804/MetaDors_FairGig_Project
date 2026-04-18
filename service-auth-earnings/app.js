@@ -9,18 +9,32 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 
-const MONGODB_URI =
+const PRIMARY_MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/fairgig";
+const FALLBACK_MONGODB_URI = process.env.MONGODB_URI_FALLBACK;
 
-mongoose
-  .connect(MONGODB_URI)
-  .then(() => {
-    console.log(`Connected to MongoDB at ${MONGODB_URI}`);
-  })
-  .catch((error) => {
-    console.error("MongoDB connection error:", error.message);
-    process.exit(1);
-  });
+async function connectMongoWithFallback() {
+  try {
+    await mongoose.connect(PRIMARY_MONGODB_URI);
+    console.log(`Connected to MongoDB (primary URI): ${PRIMARY_MONGODB_URI}`);
+    return;
+  } catch (primaryError) {
+    if (!FALLBACK_MONGODB_URI) {
+      throw primaryError;
+    }
+
+    console.warn(
+      `Primary MongoDB connection failed (${primaryError.message}). Trying fallback URI...`
+    );
+    await mongoose.connect(FALLBACK_MONGODB_URI);
+    console.log(`Connected to MongoDB (fallback URI): ${FALLBACK_MONGODB_URI}`);
+  }
+}
+
+connectMongoWithFallback().catch((error) => {
+  console.error("MongoDB connection error:", error.message);
+  process.exit(1);
+});
 
 app.use(cors());
 app.use(express.json());

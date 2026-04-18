@@ -1,0 +1,3 @@
+◇ injected env (7) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+service-auth-earnings is running on port 5001
+Connected to MongoDB at mongodb://goharabbas2122804_db_user:hIE2tpehB3oIXMMd@ac-9n7my3u-shard-00-00.vvamrty.mongodb.net:27017,ac-9n7my3u-shard-00-01.vvamrty.mongodb.net:27017,ac-9n7my3u-shard-00-02.vvamrty.mongodb.net:27017/fairgig?authSource=admin&replicaSet=atlas-yix4d0-shard-0&tls=true&retryWrites=true&w=majority
