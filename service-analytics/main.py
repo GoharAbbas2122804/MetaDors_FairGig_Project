@@ -7,6 +7,9 @@ from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/fairgig")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "fairgig")

@@ -7,16 +7,30 @@ const Signup = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('worker');
-  const { login } = useAuth();
+  const { signup } = useAuth();
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSignup = (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault();
-    if (!email) return;
-    
-    // Simulate authentication
-    login(email, password || 'password', role);
-    navigate(`/${role}/dashboard`);
+    setError('');
+
+    if (!email || !password) {
+      setError('Email and password are required.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const user = await signup(email, password, role);
+      navigate(`/${user.role}/dashboard`);
+    } catch (apiError) {
+      const message = apiError?.response?.data?.message || 'Signup failed. Please try again.';
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -68,11 +82,14 @@ const Signup = () => {
             </select>
           </div>
 
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
           <button 
             type="submit"
+            disabled={isSubmitting}
             className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full mt-4"
           >
-            Create Account
+            {isSubmitting ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 

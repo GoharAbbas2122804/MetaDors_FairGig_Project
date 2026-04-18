@@ -1,0 +1,2 @@
+◇ injected env (7) from service-auth-earnings\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+service-auth-earnings is running on port 5001
