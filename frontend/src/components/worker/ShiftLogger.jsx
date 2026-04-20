@@ -1,14 +1,15 @@
-import React, { useCallback, useState } from "react";
-import { useForm } from "react-hook-form";
+import React, { useCallback, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UploadCloud, FileSpreadsheet, CheckCircle2 } from "lucide-react";
+import { UploadCloud, FileSpreadsheet, CheckCircle2, Loader2 } from "lucide-react";
+import { earningsAPI } from "../../services/api";
+import { getApiErrorMessage } from "../../lib/getApiErrorMessage";
 
 const shiftSchema = z.object({
   platform: z.string().min(1, { message: "Platform is required." }),
@@ -19,9 +20,16 @@ const shiftSchema = z.object({
   screenshot: z.any().optional(),
 });
 
-export function ShiftLogger() {
+export function ShiftLogger({ onShiftLogged }) {
   const [csvDragging, setCsvDragging] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadedFile, setUploadedFile] = useState("");
+  const [csvFile, setCsvFile] = useState(null);
+  const [manualStatus, setManualStatus] = useState({ type: "", message: "" });
+  const [csvStatus, setCsvStatus] = useState({ type: "", message: "" });
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  const [isSubmittingCsv, setIsSubmittingCsv] = useState(false);
+  const screenshotInputRef = useRef(null);
+  const csvInputRef = useRef(null);
 
   const form = useForm({
     resolver: zodResolver(shiftSchema),
@@ -34,37 +42,124 @@ export function ShiftLogger() {
       screenshot: undefined,
     },
   });
+  const [grossValue, deductionsValue] = useWatch({
+    control: form.control,
+    name: ["gross", "deductions"],
+  });
 
-  const onSubmit = (values) => {
-    // Calculate net received conceptually
-    const netReceived = values.gross - values.deductions;
-    console.log("Logged shift:", { ...values, netReceived });
-    form.reset();
-    setUploadedFile(null);
+  const onSubmit = async (values) => {
+    setIsSubmittingManual(true);
+    setManualStatus({ type: "", message: "" });
+
+    try {
+      let screenshotUrl = "";
+      const screenshotFile = values.screenshot?.[0];
+
+      if (screenshotFile) {
+        const evidencePayload = new FormData();
+        evidencePayload.append("evidence", screenshotFile);
+
+        const uploadResponse = await earningsAPI.post(
+          "/api/earnings/upload-evidence",
+          evidencePayload,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
+        );
+
+        screenshotUrl = uploadResponse.data.evidenceUrl || "";
+      }
+
+      await earningsAPI.post("/api/earnings/shift", {
+        platform: values.platform,
+        date: values.date,
+        hours: values.hours,
+        gross: values.gross,
+        deductions: values.deductions,
+        screenshotUrl,
+      });
+
+      setManualStatus({
+        type: "success",
+        message: "Shift logged successfully and saved to the database.",
+      });
+      form.reset();
+      setUploadedFile("");
+      if (screenshotInputRef.current) {
+        screenshotInputRef.current.value = "";
+      }
+      if (typeof onShiftLogged === "function") {
+        await onShiftLogged();
+      }
+    } catch (error) {
+      setManualStatus({
+        type: "error",
+        message: getApiErrorMessage(error, "Unable to save this shift right now."),
+      });
+    } finally {
+      setIsSubmittingManual(false);
+    }
   };
 
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
+  const handleDragOver = useCallback((event) => {
+    event.preventDefault();
     setCsvDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
+  const handleDragLeave = useCallback((event) => {
+    event.preventDefault();
     setCsvDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
+  const handleDrop = useCallback((event) => {
+    event.preventDefault();
     setCsvDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      console.log("Dropped CSV file:", e.dataTransfer.files[0]);
-      // Process CSV locally here
+    const file = event.dataTransfer.files?.[0];
+    if (file) {
+      setCsvFile(file);
+      setCsvStatus({ type: "", message: "" });
     }
   }, []);
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadedFile(e.target.files[0].name);
+  const uploadCsvFile = async (file) => {
+    if (!file) {
+      setCsvStatus({ type: "error", message: "Choose a CSV file first." });
+      return;
+    }
+
+    setIsSubmittingCsv(true);
+    setCsvStatus({ type: "", message: "" });
+
+    try {
+      const payload = new FormData();
+      payload.append("file", file);
+
+      const response = await earningsAPI.post("/api/earnings/bulk-upload", payload, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      setCsvStatus({
+        type: "success",
+        message: `${response.data.insertedCount} rows inserted, ${response.data.rejectedCount} rejected.`,
+      });
+      setCsvFile(null);
+      if (csvInputRef.current) {
+        csvInputRef.current.value = "";
+      }
+      if (typeof onShiftLogged === "function") {
+        await onShiftLogged();
+      }
+    } catch (error) {
+      setCsvStatus({
+        type: "error",
+        message: getApiErrorMessage(error, "Unable to upload the CSV right now."),
+      });
+    } finally {
+      setIsSubmittingCsv(false);
     }
   };
 
@@ -72,38 +167,31 @@ export function ShiftLogger() {
     <Card className="shadow-md">
       <CardHeader>
         <CardTitle className="text-xl">Log Your Shift</CardTitle>
-        <CardDescription>Manually enter shift details or bulk upload a CSV.</CardDescription>
+        <CardDescription>
+          Save original shift data to the database with optional screenshot proof.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="manual" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsList className="mb-6 grid w-full grid-cols-2">
             <TabsTrigger value="manual">Manual Entry</TabsTrigger>
             <TabsTrigger value="csv">Bulk CSV Upload</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="manual">
             <Form {...form}>
+              {/* eslint-disable-next-line react-hooks/refs */}
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="platform"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Platform</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select platform" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="uber">Uber</SelectItem>
-                            <SelectItem value="lyft">Lyft</SelectItem>
-                            <SelectItem value="doordash">DoorDash</SelectItem>
-                            <SelectItem value="instacart">Instacart</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <Input placeholder="Uber, Lyft, InDrive..." {...field} />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -128,7 +216,7 @@ export function ShiftLogger() {
                       <FormItem>
                         <FormLabel>Hours Worked</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.1" placeholder="e.g., 5.5" {...field} />
+                          <Input type="number" step="0.1" placeholder="e.g. 5.5" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -160,87 +248,134 @@ export function ShiftLogger() {
                       </FormItem>
                     )}
                   />
-                  
-                  {/* File Upload for Screenshot */}
                   <FormField
                     control={form.control}
                     name="screenshot"
-                    render={({ field: { value, onChange, ...fieldProps } }) => (
+                    render={({ field: { onChange, ...fieldProps } }) => (
                       <FormItem>
                         <FormLabel>Earnings Screenshot</FormLabel>
                         <FormControl>
                           <div className="flex items-center gap-2">
                             <Input
+                              ref={screenshotInputRef}
                               type="file"
                               accept="image/*"
                               className="hidden"
-                              id="screenshot-upload"
-                              onChange={(e) => {
-                                handleFileChange(e);
-                                onChange(e.target.files);
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                setUploadedFile(file?.name || "");
+                                onChange(event.target.files);
                               }}
                               {...fieldProps}
                             />
                             <Button
                               type="button"
                               variant="outline"
-                              onClick={() => document.getElementById("screenshot-upload").click()}
-                              className="w-full border-dashed flex gap-2"
+                              onClick={() => screenshotInputRef.current?.click()}
+                              className="flex w-full gap-2 border-dashed"
                             >
-                              {uploadedFile ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <UploadCloud className="w-4 h-4" />}
-                              {uploadedFile ? "Uploaded" : "Attach Proof"}
+                              {uploadedFile ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <UploadCloud className="h-4 w-4" />
+                              )}
+                              {uploadedFile ? "Proof attached" : "Attach Proof"}
                             </Button>
                           </div>
                         </FormControl>
-                        {uploadedFile && (
-                          <p className="text-xs text-muted-foreground mt-1 truncate">{uploadedFile}</p>
-                        )}
+                        {uploadedFile ? (
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {uploadedFile}
+                          </p>
+                        ) : null}
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
 
-                <div className="bg-muted px-4 py-3 rounded-lg flex justify-between items-center mt-2">
-                  <span className="text-sm font-medium">Net Received (Est.):</span>
+                <div className="mt-2 flex items-center justify-between rounded-lg bg-muted px-4 py-3">
+                  <span className="text-sm font-medium">Net Received (Est.)</span>
                   <span className="text-lg font-bold text-primary">
-                    ${Math.max(0, (form.watch("gross") || 0) - (form.watch("deductions") || 0)).toFixed(2)}
+                    $
+                    {Math.max(
+                      0,
+                      Number(grossValue || 0) - Number(deductionsValue || 0)
+                    ).toFixed(2)}
                   </span>
                 </div>
 
-                <Button type="submit" className="w-full">Log Shift</Button>
+                {manualStatus.message ? (
+                  <p
+                    className={`text-sm ${
+                      manualStatus.type === "error" ? "text-destructive" : "text-green-600"
+                    }`}
+                  >
+                    {manualStatus.message}
+                  </p>
+                ) : null}
+
+                <Button type="submit" className="w-full" disabled={isSubmittingManual}>
+                  {isSubmittingManual ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Log Shift
+                </Button>
               </form>
             </Form>
           </TabsContent>
-          
+
           <TabsContent value="csv">
             <div
-              className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-colors ${
+              className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
                 csvDragging ? "border-primary bg-primary/5" : "border-border bg-card"
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <FileSpreadsheet className={`w-12 h-12 mb-4 ${csvDragging ? "text-primary" : "text-muted-foreground"}`} />
+              <FileSpreadsheet
+                className={`mb-4 h-12 w-12 ${
+                  csvDragging ? "text-primary" : "text-muted-foreground"
+                }`}
+              />
               <h3 className="text-lg font-semibold">Drag & Drop CSV File</h3>
-              <p className="text-sm text-muted-foreground mt-1 mb-4">
-                Upload bulk shifts exported from platform apps.
+              <p className="mb-4 mt-1 text-sm text-muted-foreground">
+                Upload exported shift logs and store the accepted rows in the database.
               </p>
               <Input
+                ref={csvInputRef}
                 type="file"
                 accept=".csv"
                 className="hidden"
-                id="csv-upload"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                     console.log("Selected CSV file:", e.target.files[0]);
-                  }
+                onChange={(event) => {
+                  setCsvFile(event.target.files?.[0] || null);
+                  setCsvStatus({ type: "", message: "" });
                 }}
               />
-              <Button type="button" variant="secondary" onClick={() => document.getElementById("csv-upload").click()}>
-                Browse Files
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button type="button" variant="secondary" onClick={() => csvInputRef.current?.click()}>
+                  Browse Files
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => uploadCsvFile(csvFile)}
+                  disabled={isSubmittingCsv || !csvFile}
+                >
+                  {isSubmittingCsv ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Upload CSV
+                </Button>
+              </div>
+              {csvFile ? (
+                <p className="mt-3 text-sm text-foreground">{csvFile.name}</p>
+              ) : null}
+              {csvStatus.message ? (
+                <p
+                  className={`mt-3 text-sm ${
+                    csvStatus.type === "error" ? "text-destructive" : "text-green-600"
+                  }`}
+                >
+                  {csvStatus.message}
+                </p>
+              ) : null}
             </div>
           </TabsContent>
         </Tabs>

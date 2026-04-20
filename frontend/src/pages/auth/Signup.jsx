@@ -2,31 +2,54 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Lightbulb } from 'lucide-react';
+import { signupSchema } from '../../lib/authSchemas';
+import { getApiErrorMessage } from '../../lib/getApiErrorMessage';
 
 const Signup = () => {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('worker');
-  const { signup } = useAuth();
+  const [cityZone, setCityZone] = useState('');
+  const { signup, getDashboardPath, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    if (isAuthenticated && user?.role) {
+      navigate(getDashboardPath(user.role), { replace: true });
+    }
+  }, [getDashboardPath, isAuthenticated, navigate, user?.role]);
 
   const handleSignup = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (!email || !password) {
-      setError('Email and password are required.');
+    const validation = signupSchema.safeParse({
+      fullName,
+      email,
+      password,
+      role,
+      cityZone,
+    });
+    if (!validation.success) {
+      setError(validation.error.issues[0]?.message || 'Please review your signup details.');
       return;
     }
 
     try {
       setIsSubmitting(true);
-      const user = await signup(email, password, role);
-      navigate(`/${user.role}/dashboard`);
+      const authenticatedUser = await signup({
+        ...validation.data,
+        demographics:
+          validation.data.role === 'worker' && validation.data.cityZone
+            ? { cityZone: validation.data.cityZone }
+            : undefined,
+      });
+      navigate(getDashboardPath(authenticatedUser.role), { replace: true });
     } catch (apiError) {
-      const message = apiError?.response?.data?.message || 'Signup failed. Please try again.';
+      const message = getApiErrorMessage(apiError, 'Signup failed. Please try again.');
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -45,6 +68,18 @@ const Signup = () => {
         </div>
 
         <form onSubmit={handleSignup} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium leading-none text-foreground">Full Name</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="Amina Khan"
+              required
+            />
+          </div>
+
           <div className="space-y-2">
             <label className="text-sm font-medium leading-none text-foreground">Email</label>
             <input 
@@ -67,6 +102,7 @@ const Signup = () => {
               placeholder="••••••••"
               required
             />
+            <p className="text-xs text-muted-foreground">Use at least 8 characters with uppercase, lowercase, and a number.</p>
           </div>
 
           <div className="space-y-2">
@@ -81,6 +117,19 @@ const Signup = () => {
               <option value="advocate">Advocate</option>
             </select>
           </div>
+
+          {role === 'worker' ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none text-foreground">City / Zone</label>
+              <input
+                type="text"
+                value={cityZone}
+                onChange={(e) => setCityZone(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Lahore - Gulberg"
+              />
+            </div>
+          ) : null}
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

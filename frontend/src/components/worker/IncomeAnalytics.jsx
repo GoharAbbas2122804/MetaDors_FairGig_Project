@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -9,75 +9,129 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpRight } from "lucide-react";
 
-const mockEarningsData = [
-  { week: "W1", earnings: 450, cityMedian: 400 },
-  { week: "W2", earnings: 520, cityMedian: 410 },
-  { week: "W3", earnings: 480, cityMedian: 415 },
-  { week: "W4", earnings: 610, cityMedian: 420 },
-];
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
 
-const mockRatesData = [
-  { date: "Mon", hourlyRate: 18, commission: 20 },
-  { date: "Tue", hourlyRate: 22, commission: 20 },
-  { date: "Wed", hourlyRate: 19, commission: 20 },
-  { date: "Thu", hourlyRate: 25, commission: 25 },
-  { date: "Fri", hourlyRate: 28, commission: 25 },
-  { date: "Sat", hourlyRate: 35, commission: 30 },
-  { date: "Sun", hourlyRate: 32, commission: 30 },
-];
+function formatCurrency(value) {
+  return currencyFormatter.format(Number(value || 0));
+}
 
-export function IncomeAnalytics() {
-  const totalEarnings = mockEarningsData.reduce((acc, curr) => acc + curr.earnings, 0);
-  const cityMedianTotal = mockEarningsData.reduce((acc, curr) => acc + curr.cityMedian, 0);
-  const isAboveMedian = totalEarnings > cityMedianTotal;
+function formatShortDate(value) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
+}
+
+export function IncomeAnalytics({ monthly, dailyTrend = [] }) {
+  const chartData = useMemo(
+    () =>
+      dailyTrend.map((entry) => ({
+        ...entry,
+        label: formatShortDate(entry.date),
+      })),
+    [dailyTrend]
+  );
+
+  const hasMonthlyData = (monthly?.shiftCount || 0) > 0;
 
   return (
     <div className="space-y-6">
       <Card className="border-l-4 border-l-primary bg-gradient-to-br from-card to-card/50 shadow-md">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between text-sm font-medium text-muted-foreground">
             Monthly Earnings Overview
-            <Badge variant={isAboveMedian ? "default" : "destructive"} className="ml-2">
-              {isAboveMedian ? "+ Above City Median" : "- Below City Median"}
+            <Badge variant={hasMonthlyData ? "default" : "secondary"} className="ml-2">
+              {hasMonthlyData ? `${monthly.shiftCount} shifts this month` : "No shifts yet"}
             </Badge>
           </CardTitle>
-          <div className="text-3xl font-bold tracking-tight">${totalEarnings}</div>
+          <div className="text-3xl font-bold tracking-tight">
+            {formatCurrency(monthly?.net)}
+          </div>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground mb-4">
-            You earned <span className="font-semibold text-foreground">${totalEarnings - cityMedianTotal}</span> more than the city-wide median (${cityMedianTotal}) this month.
-          </p>
-          <div className="h-[200px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockEarningsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorMedian" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="week" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                  itemStyle={{ color: "hsl(var(--foreground))" }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
-                <Area type="monotone" name="Your Earnings" dataKey="earnings" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorEarnings)" />
-                <Area type="monotone" name="City Median" dataKey="cityMedian" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="5 5" fillOpacity={1} fill="url(#colorMedian)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-muted/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Gross</p>
+              <p className="mt-1 text-lg font-semibold">{formatCurrency(monthly?.gross)}</p>
+            </div>
+            <div className="rounded-lg bg-muted/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Commission</p>
+              <p className="mt-1 text-lg font-semibold">
+                {monthly?.averageCommissionRate?.toFixed?.(2) || "0.00"}%
+              </p>
+            </div>
+            <div className="rounded-lg bg-muted/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Hours</p>
+              <p className="mt-1 text-lg font-semibold">{monthly?.hours || 0}</p>
+            </div>
+          </div>
+
+          <div className="h-[220px] w-full">
+            {chartData.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorGross" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => `$${value}`}
+                  />
+                  <Tooltip
+                    formatter={(value, name) => [formatCurrency(value), name]}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
+                  <Area
+                    type="monotone"
+                    name="Net Earnings"
+                    dataKey="net"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorNet)"
+                  />
+                  <Area
+                    type="monotone"
+                    name="Gross Earnings"
+                    dataKey="gross"
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorGross)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                Monthly earnings will appear here after your first logged shift.
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -85,24 +139,93 @@ export function IncomeAnalytics() {
       <Card className="shadow-md">
         <CardHeader>
           <CardTitle className="text-lg">Efficiency & Commission Tracking</CardTitle>
-          <CardDescription>Monitor your effective hourly rate against platform commissions.</CardDescription>
+          <CardDescription>
+            Effective hourly earnings and commission rate are calculated from your
+            real monthly shift logs.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[250px] w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockRatesData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} yAxisId="left" tickFormatter={(v) => `$${v}/h`} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} yAxisId="right" orientation="right" tickFormatter={(v) => `${v}%`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                />
-                <Legend iconType="plainline" wrapperStyle={{ fontSize: "12px" }} />
-                <Line yAxisId="left" type="monotone" name="Hourly Rate ($)" dataKey="hourlyRate" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                <Line yAxisId="right" type="step" name="Commission (%)" dataKey="commission" stroke="hsl(var(--destructive))" strokeWidth={2} strokeDasharray="4 4" dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-muted/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Net</p>
+              <p className="mt-1 text-lg font-semibold">{formatCurrency(monthly?.net)}</p>
+            </div>
+            <div className="rounded-lg bg-muted/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Deductions</p>
+              <p className="mt-1 text-lg font-semibold">{formatCurrency(monthly?.deductions)}</p>
+            </div>
+            <div className="rounded-lg bg-muted/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Avg Hourly</p>
+              <p className="mt-1 text-lg font-semibold">
+                {formatCurrency(monthly?.averageHourlyRate)}
+              </p>
+            </div>
+          </div>
+
+          <div className="h-[250px] w-full">
+            {chartData.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    yAxisId="left"
+                    tickFormatter={(value) => `$${value}/h`}
+                  />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    yAxisId="right"
+                    orientation="right"
+                    tickFormatter={(value) => `${value}%`}
+                  />
+                  <Tooltip
+                    formatter={(value, name) => [
+                      name === "Commission (%)"
+                        ? `${Number(value).toFixed(2)}%`
+                        : formatCurrency(value),
+                      name,
+                    ]}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Legend iconType="plainline" wrapperStyle={{ fontSize: "12px" }} />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    name="Hourly Rate ($)"
+                    dataKey="hourlyRate"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    name="Commission (%)"
+                    dataKey="commissionRate"
+                    stroke="hsl(var(--destructive))"
+                    strokeWidth={2}
+                    strokeDasharray="4 4"
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                Commission tracking will appear after shifts are saved to the database.
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

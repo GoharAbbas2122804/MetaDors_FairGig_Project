@@ -1,57 +1,82 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
-import { authAPI } from '../services/api';
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { authAPI } from "../services/api";
 
 const AuthContext = createContext();
+const DASHBOARD_BY_ROLE = {
+  worker: "/worker/dashboard",
+  verifier: "/verifier/dashboard",
+  advocate: "/advocate/dashboard",
+};
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem('user');
-    if (!stored) return null;
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-    try {
-      return JSON.parse(stored);
-    } catch {
-      localStorage.removeItem('user');
-      return null;
-    }
-  });
-
-  const setAuthState = (nextUser, accessToken, refreshToken) => {
+  const setAuthState = (nextUser) => {
     setUser(nextUser);
-    localStorage.setItem('user', JSON.stringify(nextUser));
-    localStorage.setItem('token', accessToken);
+  };
 
-    if (refreshToken) {
-      localStorage.setItem('refreshToken', refreshToken);
+  const clearAuthState = () => {
+    setUser(null);
+  };
+
+  const hydrateSession = async () => {
+    try {
+      const response = await authAPI.get("/api/auth/me");
+      setUser(response.data.user);
+    } catch {
+      clearAuthState();
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const login = async (email, password) => {
-    const response = await authAPI.post('/api/auth/login', { email, password });
-    const { accessToken, refreshToken, user: nextUser } = response.data;
-    setAuthState(nextUser, accessToken, refreshToken);
+  useEffect(() => {
+    hydrateSession();
+  }, []);
+
+  const login = async ({ email, password }) => {
+    const response = await authAPI.post("/api/auth/login", { email, password });
+    const { user: nextUser } = response.data;
+    setAuthState(nextUser);
     return nextUser;
   };
 
-  const signup = async (email, password, role) => {
-    await authAPI.post('/api/auth/register', { email, password, role });
-
-    // Auto-login after successful registration for smoother onboarding.
-    return login(email, password);
+  const signup = async ({ fullName, email, password, role, demographics }) => {
+    const response = await authAPI.post("/api/auth/register", {
+      fullName,
+      email,
+      password,
+      role,
+      demographics,
+    });
+    const { user: nextUser } = response.data;
+    setAuthState(nextUser);
+    return nextUser;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
+  const logout = async () => {
+    try {
+      await authAPI.post("/api/auth/logout");
+    } catch {
+      // Clearing local auth state is still correct even if the network request fails.
+    }
+    clearAuthState();
   };
 
   const value = useMemo(
-    () => ({ user, login, signup, logout }),
-    [user]
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: Boolean(user),
+      login,
+      signup,
+      logout,
+      getDashboardPath: (role = user?.role) => DASHBOARD_BY_ROLE[role] || "/login",
+    }),
+    [isLoading, user]
   );
 
   return (

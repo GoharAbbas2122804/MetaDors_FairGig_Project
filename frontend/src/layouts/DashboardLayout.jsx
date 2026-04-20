@@ -15,12 +15,24 @@ import {
 } from 'lucide-react';
 
 const DashboardLayout = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/40 text-sm text-muted-foreground">
+        Restoring your session...
+      </div>
+    );
+  }
 
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
+  const displayName =
+    user.fullName ||
+    (user.email ? user.email.split("@")[0] : user.role || "User");
 
   const roleLinks = {
     worker: [
@@ -88,7 +100,7 @@ const DashboardLayout = () => {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm font-medium px-3 py-1.5 bg-muted rounded-full">
               <User className="h-4 w-4" />
-              <span className="capitalize">{user.name}</span>
+              <span className="capitalize">{displayName}</span>
             </div>
             <button
               onClick={logout}

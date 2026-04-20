@@ -7,6 +7,7 @@ const mongoose = require("mongoose");
 const puppeteer = require("puppeteer");
 const Shift = require("./models/Shift");
 const { verifyToken } = require("./middleware/auth");
+const { buildCorsOptions } = require("../shared/auth");
 
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
@@ -24,7 +25,7 @@ mongoose
     process.exit(1);
   });
 
-app.use(cors());
+app.use(cors(buildCorsOptions()));
 app.use(express.json());
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");

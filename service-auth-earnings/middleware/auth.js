@@ -1,15 +1,21 @@
 const jwt = require("jsonwebtoken");
+const { extractAccessToken } = require("../../shared/auth");
 
-const JWT_SECRET = process.env.JWT_SECRET || "change-me-access-secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  console.error(
+    "[AUTH] Missing JWT_SECRET. Set it in service-auth-earnings/.env before starting the server."
+  );
+  process.exit(1);
+}
 
 function verifyToken(req, res, next) {
-  const authHeader = req.headers.authorization;
+  const token = extractAccessToken(req);
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Authorization token missing." });
+  if (!token) {
+    return res.status(401).json({ message: "Authentication required." });
   }
-
-  const token = authHeader.split(" ")[1];
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);

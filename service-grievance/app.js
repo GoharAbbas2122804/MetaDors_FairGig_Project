@@ -3,6 +3,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const grievanceRoutes = require("./routes/grievances");
 const path = require("path");
+const { buildCorsOptions } = require("../shared/auth");
 
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
@@ -21,7 +22,7 @@ mongoose
     process.exit(1);
   });
 
-app.use(cors());
+app.use(cors(buildCorsOptions()));
 app.use(express.json());
 
 app.get("/health", (req, res) => {

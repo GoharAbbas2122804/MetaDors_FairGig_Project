@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
+import { useAuth } from './context/AuthContext';
 
 // Public Pages
 import Login from './pages/auth/Login';
@@ -21,6 +22,20 @@ import VerifierQueue from './pages/verifier/Queue';
 import AdvocateDashboard from './pages/advocate/Dashboard';
 import AdvocateGrievances from './pages/advocate/Grievances';
 import AdvocateAnomalies from './pages/advocate/Anomalies';
+
+function HomeRedirect() {
+  const { user, isLoading, getDashboardPath } = useAuth();
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (user?.role) {
+    return <Navigate to={getDashboardPath(user.role)} replace />;
+  }
+
+  return <Navigate to="/login" replace />;
+}
 
 function App() {
   return (
@@ -56,8 +71,8 @@ function App() {
       </Route>
 
       {/* Default Fallback */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<HomeRedirect />} />
+      <Route path="*" element={<HomeRedirect />} />
     </Routes>
   );
 }

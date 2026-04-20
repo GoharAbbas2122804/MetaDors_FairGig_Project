@@ -2,30 +2,39 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Lightbulb } from 'lucide-react';
+import { loginSchema } from '../../lib/authSchemas';
+import { getApiErrorMessage } from '../../lib/getApiErrorMessage';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login } = useAuth();
+  const { login, getDashboardPath, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    if (isAuthenticated && user?.role) {
+      navigate(getDashboardPath(user.role), { replace: true });
+    }
+  }, [getDashboardPath, isAuthenticated, navigate, user?.role]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (!email || !password) {
-      setError('Email and password are required.');
+    const validation = loginSchema.safeParse({ email, password });
+    if (!validation.success) {
+      setError(validation.error.issues[0]?.message || 'Please check your login details.');
       return;
     }
 
     try {
       setIsSubmitting(true);
-      const user = await login(email, password);
-      navigate(`/${user.role}/dashboard`);
+      const authenticatedUser = await login(validation.data);
+      navigate(getDashboardPath(authenticatedUser.role), { replace: true });
     } catch (apiError) {
-      const message = apiError?.response?.data?.message || 'Login failed. Please try again.';
+      const message = getApiErrorMessage(apiError, 'Login failed. Please try again.');
       setError(message);
     } finally {
       setIsSubmitting(false);

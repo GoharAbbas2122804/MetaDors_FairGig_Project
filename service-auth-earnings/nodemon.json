@@ -1,0 +1,21 @@
+{
+  "watch": [
+    "index.js",
+    "app.js",
+    "controllers",
+    "routes",
+    "middleware",
+    "models",
+    ".env",
+    "../shared/auth.js"
+  ],
+  "ext": "js,json,env",
+  "ignore": [
+    "node_modules/**",
+    "uploads/**",
+    "tests/**"
+  ],
+  "delay": "250",
+  "exec": "node index.js",
+  "signal": "SIGTERM"
+}

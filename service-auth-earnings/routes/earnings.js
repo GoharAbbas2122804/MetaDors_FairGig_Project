@@ -5,7 +5,10 @@ const fs = require("fs");
 const {
   logShift,
   getShiftHistory,
+  getWorkerDashboard,
   updateVerificationStatus,
+  getVerifierQueue,
+  getWorkerOverview,
   bulkUploadShifts,
   uploadEvidence,
 } = require("../controllers/earnings");
@@ -60,6 +63,14 @@ const evidenceUpload = multer({
 router.post("/shift", verifyToken, requireRole(["worker"]), logShift);
 router.post("/log-shift", verifyToken, requireRole(["worker"]), logShift);
 router.get("/shifts", verifyToken, requireRole(["worker"]), getShiftHistory);
+router.get("/dashboard/worker", verifyToken, requireRole(["worker"]), getWorkerDashboard);
+router.get("/verifier/queue", verifyToken, requireRole(["verifier"]), getVerifierQueue);
+router.get(
+  "/workers/overview",
+  verifyToken,
+  requireRole(["verifier", "advocate"]),
+  getWorkerOverview
+);
 router.patch(
   "/shift/:shiftId/verification-status",
   verifyToken,

@@ -57,6 +57,55 @@ async function getPublicFeed(req, res, next) {
   }
 }
 
+async function getManagementFeed(req, res, next) {
+  try {
+    const grievances = await Grievance.aggregate([
+      {
+        $lookup: {
+          from: "users",
+          localField: "workerId",
+          foreignField: "_id",
+          as: "worker",
+        },
+      },
+      {
+        $unwind: {
+          path: "$worker",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $project: {
+          _id: 1,
+          category: 1,
+          description: 1,
+          status: 1,
+          tags: 1,
+          clusterId: 1,
+          isPublic: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          worker: {
+            _id: "$worker._id",
+            fullName: "$worker.fullName",
+            email: "$worker.email",
+            role: "$worker.role",
+            demographics: { $ifNull: ["$worker.demographics", {}] },
+          },
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      count: grievances.length,
+      grievances,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function addTags(req, res, next) {
   try {
     const { id } = req.params;
@@ -210,6 +259,7 @@ async function getGrievanceStats(req, res, next) {
 module.exports = {
   createGrievance,
   getPublicFeed,
+  getManagementFeed,
   addTags,
   clusterGrievances,
   updateStatus,

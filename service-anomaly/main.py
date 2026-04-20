@@ -1,13 +1,30 @@
+import os
 from statistics import mean
 from typing import List
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 app = FastAPI(
     title="FairGig Anomaly Service",
     description="Detects suspicious income and deduction patterns from shift data.",
     version="1.0.0",
+)
+
+frontend_origins = [
+    origin.strip()
+    for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=frontend_origins,
+    allow_origin_regex=r"https?://.*" if not frontend_origins else None,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
