@@ -43,10 +43,43 @@ async function createGrievance(req, res, next) {
 
 async function getPublicFeed(req, res, next) {
   try {
-    const grievances = await Grievance.find({ isPublic: true })
-      .select("-workerId")
-      .sort({ createdAt: -1 })
-      .lean();
+    const grievances = await Grievance.aggregate([
+      { $match: { isPublic: true } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "workerId",
+          foreignField: "_id",
+          as: "worker",
+        },
+      },
+      {
+        $unwind: {
+          path: "$worker",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $project: {
+          _id: 1,
+          category: 1,
+          description: 1,
+          status: 1,
+          tags: 1,
+          clusterId: 1,
+          isPublic: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          worker: {
+            _id: "$worker._id",
+            fullName: "$worker.fullName",
+            role: "$worker.role",
+            demographics: { $ifNull: ["$worker.demographics", {}] },
+          },
+        },
+      },
+    ]);
 
     return res.status(200).json({
       count: grievances.length,

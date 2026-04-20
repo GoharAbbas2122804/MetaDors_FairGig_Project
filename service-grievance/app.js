@@ -1,11 +1,16 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const grievanceRoutes = require("./routes/grievances");
-const path = require("path");
 const { buildCorsOptions } = require("../shared/auth");
-
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+const {
+  applySecurityHeaders,
+  redactMongoUri,
+  sanitizeErrorForLog,
+} = require("../shared/security");
 
 const app = express();
 
@@ -15,15 +20,17 @@ const MONGODB_URI =
 mongoose
   .connect(MONGODB_URI)
   .then(() => {
-    console.log(`Connected to MongoDB at ${MONGODB_URI}`);
+    console.log(`Connected to MongoDB (${redactMongoUri(MONGODB_URI)})`);
   })
   .catch((error) => {
-    console.error("MongoDB connection error:", error.message);
+    console.error("MongoDB connection error:", sanitizeErrorForLog(error));
     process.exit(1);
   });
 
+app.disable("x-powered-by");
 app.use(cors(buildCorsOptions()));
-app.use(express.json());
+app.use(applySecurityHeaders);
+app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "grievance" });
@@ -36,7 +43,7 @@ app.use((req, res) => {
 });
 
 app.use((error, req, res, next) => {
-  console.error(error);
+  console.error("service-grievance error:", sanitizeErrorForLog(error));
   const status = error.status || 500;
   res.status(status).json({
     message: error.message || "Internal server error.",

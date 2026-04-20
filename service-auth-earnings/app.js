@@ -11,6 +11,10 @@ const mongoose = require("mongoose");
 const authRoutes = require("./routes/auth");
 const earningsRoutes = require("./routes/earnings");
 const { buildCorsOptions } = require("../shared/auth");
+const {
+  applySecurityHeaders,
+  sanitizeErrorForLog,
+} = require("../shared/security");
 
 const app = express();
 
@@ -51,7 +55,7 @@ async function connectMongoWithFallback() {
     }
 
     console.warn(
-      `Primary MongoDB connection failed (${primaryError.message}). Trying fallback database URI...`
+      `Primary MongoDB connection failed (${sanitizeErrorForLog(primaryError)}). Trying fallback database URI...`
     );
     await mongoose.connect(FALLBACK_MONGODB_URI, MONGO_CONNECT_OPTIONS);
     activeMongoUriLabel = "fallback";
@@ -60,8 +64,10 @@ async function connectMongoWithFallback() {
   }
 }
 
+app.disable("x-powered-by");
 app.use(cors(buildCorsOptions()));
-app.use(express.json());
+app.use(applySecurityHeaders);
+app.use(express.json({ limit: "100kb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get("/health", (req, res) => {
@@ -89,7 +95,7 @@ app.use((req, res) => {
 });
 
 app.use((error, req, res, next) => {
-  console.error(error);
+  console.error("service-auth-earnings error:", sanitizeErrorForLog(error));
   const status = error.status || 500;
   res.status(status).json({
     message: error.message || "Internal server error.",
